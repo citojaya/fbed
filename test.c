@@ -1,5 +1,5 @@
 
- #include "udf.h"
+ 
  #include "common.h"
 
  #define C2 100.0
@@ -23,18 +23,25 @@ DEFINE_INIT(my_init, d)
     if(x[0] < xmin) xmin = x[0];
     if(x[1] < ymin) ymin = x[1];
     if(x[2] < zmin) zmin = x[2];
-    //printf("XMAX%lf\n",x[1]);
   end_c_loop(c,t)
-  printf("MAX%lf,%lf,%lf\n",xmax,ymax,zmax);
-  printf("MIN%lf,%lf,%lf\n",xmin,ymin,zmin);
-  // thread_loop_c(t,d)
-  // {
 
-  // }
+  xmin = xmin*multif1_2;
+  xmax = xmax*multif1_2;
+  ymin = ymin*multif1_2;
+  ymax = ymax*multif1_2;
+  zmin = zmin*multif1_2;
+  zmax = zmax*multif1_2;
+  int xD = floor((xmax-xmin)/(largestParDia*conversion*multif3));
+  int yD = floor((ymax-ymin)/(largestParDia*conversion*multif3));
+  int zD = floor((zmax-zmin)/(largestParDia*conversion*multif3));
 
-  demInit();
-  buildDEMCFDCellMap();
+  double dx = (xmax-xmin)/xD;
+  double dy = (ymax-ymin)/yD;
+  double dz = (zmax-zmin)/zD;
+
+  demInit(xD, yD, zD, dx, dy, dz);
   fflush(stdout);
+  //exit(0);
 }
 
 DEFINE_SOURCE(xmom_source,c,t,dS,eqn)
@@ -45,7 +52,6 @@ DEFINE_SOURCE(xmom_source,c,t,dS,eqn)
   con = C2*0.5*C_R(c,t)*x[1];
   source = -con*fabs(C_U(c, t))*C_U(c,t);
   dS[eqn] = -2.*con*fabs(C_U(c,t));
-  //printf("SOURCE\n");
   return source;
 } 
 
@@ -57,7 +63,6 @@ DEFINE_SOURCE(ymom_source,c,t,dS,eqn)
   con = C2*0.5*C_R(c,t)*x[1];
   source = -con*fabs(C_U(c, t))*C_U(c,t);
   dS[eqn] = -2.*con*fabs(C_U(c,t));
-  //printf("SOURCE\n");
   return source;
 } 
 
@@ -69,7 +74,6 @@ DEFINE_SOURCE(zmom_source,c,t,dS,eqn)
   con = C2*0.5*C_R(c,t)*x[1];
   source = -con*fabs(C_U(c, t))*C_U(c,t);
   dS[eqn] = -2.*con*fabs(C_U(c,t));
-  //printf("SOURCE\n");
   return source;
 } 
 
@@ -77,115 +81,90 @@ DEFINE_SOURCE(zmom_source,c,t,dS,eqn)
   Porosity and drag force information from DEM is transferred to CFD*/
 DEFINE_ADJUST(my_adjust, d)
 {
-  //Update porosity and momentum source term in DEM cells
-  copyDEMInfo();
+  //reset no of fluid cells in bounding box cells
 
-  Thread *t;
-  cell_t c;
-
-  //Loop over FLuent cells and update porosity and momentum term
-  thread_loop_c(t,d)
-  {
-    begin_c_loop(c,t)
-      //printf("CELL\n");
-    end_c_loop(c,t)
-  }
-
-  
+  //copyDEMInfo();
+  //printf("DEF ADJUST ");
   fflush(stdout);
 }
 
-/* Execute at end of each iteration transfer CFD information to DEM
-    NOTE: Each iteration may have number of timesteps
+/* Execute at end of each CFD timestep and update background cells which is required for DEM
+    NOTE: Each timestep may have number of iterations
 */
 DEFINE_EXECUTE_AT_END(execute_at_end)
 {
-  Domain *d1, *d2;
-  Thread *t1, *t2;
+  Domain *d;
+  Thread *t;
   cell_t c;
+  real x[ND_ND]; //Fluent real array for storing centroid coordinates
 
-  d1 = Get_Domain(1);
-  d2 = Get_Domain(2);
-  /*Array for storing cell centroid
-    real xc[ND_ND];
+  d = Get_Domain(1);
+  t = Lookup_Thread(d,1);
 
-  
-    face_t f;
-    Node *node;
-    cell_t c;
-    int n;
-    real xc[ND_ND];
-
-    d = Get_Domain(1);*/  /* mixture domain if multiphase */
-  /*  t = Lookup_Thread(d,6);
-    printf("DEFINE_EXECUTE_AT_END\n");
- 
-    int i=0;
-*/
-  t1 = Lookup_Thread(d1,1);
-  t2 = Lookup_Thread(d2,1);
-  thread_loop_c(t2,d2)
+  //Update boundary cells with fluid velocity
+  thread_loop_c(t,d)
   {
-    begin_c_loop(c,t2)
-      //printf("Cell Vel %lf,%lf,%lf\n", C_U(c, t), C_V(c, t),C_W(c, t));
-      //printf("Cell Press %lf\n", C_P(c, t));
-      C_VOF(c,t2) = 0.4;
-      //printf("Cell C_VOF %lf\n", C_VOF(c, t));
+     begin_c_loop(c,t)
+      C_CENTROID(x,c,t);
       
-    end_c_loop(c,t2)
+      int iIndex = ceil(x[0]/domainDx);
+      int jIndex = ceil(x[1]/domainDy);
+      int kIndex = ceil(x[2]/domainDz);
+      int cellIndex = iIndex + jIndex*xDiv + kIndex*xDiv*yDiv;
+
+      if(cellIndex > xDiv*yDiv*zDiv){
+        printf("ERRO CELL I %d\n",cellIndex);
+        exit(0);
+      }
+      bdBox[cellIndex].noOfFluidCells+=1;
+      int newSize = bdBox[cellIndex].noOfFluidCells;
+      double preVX = bdBox[cellIndex].fluidVelX;
+      double preVY = bdBox[cellIndex].fluidVelY;
+      double preVZ = bdBox[cellIndex].fluidVelZ;
+      
+      bdBox[cellIndex].fluidVelX = (newSize-1)*preVX/newSize + C_U(c,t)*velocityFactor/newSize;
+      bdBox[cellIndex].fluidVelY = (newSize-1)*preVY/newSize + C_V(c,t)*velocityFactor/newSize;
+      bdBox[cellIndex].fluidVelZ = (newSize-1)*preVZ/newSize + C_W(c,t)*velocityFactor/newSize;
+
+      //bdBox[cellIndex].fluidVolF = C_VOF(c,t);
+      bdBox[cellIndex].fluidVolF = FVOLF; //For testing FVOLF=0.5
+     end_c_loop(c,t)
   }
 
-  printf("TIME STEP%lf\n",CURRENT_TIMESTEP);
-  thread_loop_c(t1,d1)
-  {
-    begin_c_loop(c,t1)
-      //printf("D1 Cell Vel %lf,%lf,%lf\n", C_U(c, t1), C_V(c, t1),C_W(c, t1));
-      //printf("D1 Cell Press %lf\n", C_P(c, t1));
-    end_c_loop(c,t1)
+  //start DEM simulation
+  demLoop();
+  //save DEM output data 
+  demSave();
+
+  //reset bounding box size to zero
+  for(int i=0; i<xDiv*yDiv*zDiv; i++){
+    bdBox[i].noOfFluidCells = 0;
+    bdBox[i].fluidVelX = 0.0;
+    bdBox[i].fluidVelY = 0.0;
+    bdBox[i].fluidVelZ = 0.0;
   }
-  /*
-    begin_c_loop(c,t)
-    {
-      // c_node_loop(c,t,n)
-      // {
-
-      // }
-
-      C_CENTROID(xc,c,t);
-
-      printf("Cell loop %lf, %lf, %lf\n",xc[0], xc[1], xc[2]);
-      i++;
-    }
-    end_c_loop(c,t)
-  */
-    /* DEM iteration*/
-    //demLoop();
-    printf("No of par %d\n", np);
-
-
-    //run();
-    fflush(stdout);
+  fflush(stdout);
 }
 
 DEFINE_EXECUTE_AT_EXIT(execute_at_exit)
 {
   // Delete dynamic memeory
-  free(parPosX);
-  free(parPosY);
-  free(parPosZ);
+  
   free(sortedList);
   free(sortedParIndex);
   free(cellSE);
     //free(parIndex);
-  free(parDia);
+  
   free(parNb);
   free(parNoOfNb);
   free(parCIndex);
-  free(parInert);
-  free(parMass);
+  
+  
   free(uVec);
   free(ipRVec);
   free(jpRVec);
+  free(bdBox);
+  free(particle);
   printf("EXECUTE AT EXIT\n");
   fflush(stdout);
 }

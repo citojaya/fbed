@@ -13,43 +13,42 @@ int main(void){
 /* Run the program*/
 void run(){
     //***** Test code ***********
-    /*double *pForce = malloc(dim*sizeof(double));
-    double *uVec = malloc(dim*sizeof(double));
-    double *res = malloc(dim*sizeof(double));
-    double *res2 = malloc(dim*sizeof(double));
+    double xmin = 0.0;
+    double xmax = 10.0;
+    double ymin = 0.0;
+    double ymax = 88.0;
+    double zmin = 0.0;
+    double zmax = 200.0;
 
-    uVec[0] = 5.0;
-    uVec[1] = 6.7;
-    uVec[2] = 2.85;
+    xmin = xmin*multif1_2;
+    xmax = xmax*multif1_2;
+    ymin = ymin*multif1_2;
+    ymax = ymax*multif1_2;
+    zmin = zmin*multif1_2;
+    zmax = zmax*multif1_2;
+    int xD = floor((xmax-xmin)/(largestParDia*conversion*multif3));
+    int yD = floor((ymax-ymin)/(largestParDia*conversion*multif3));
+    int zD = floor((zmax-zmin)/(largestParDia*conversion*multif3));
 
-    pForce[0] = 0.0;
-	pForce[1] = 100.0;
-	pForce[2] = 0.0;
+    double dx = (xmax-xmin)/xD;
+    double dy = (ymax-ymin)/yD;
+    double dz = (zmax-zmin)/zD;
 
-
-    unitVec(uVec, res);
-    //crossProd(uVec, pForce, res);
-    printf("Results 1 %lf, %lf, %lf\n", res[0],res[1],res[2]);
-    //projVec(pForce, uVec, res2, 0);
-    //printf("Results 2 %lf, %lf, %lf\n", res2[0],res2[1],res2[2]);
-
-    
-    free(pForce);
-    free(uVec);
-    free(res);
-    free(res2);*/
-    //*************************
-    
     //Initialise DEM parameters, read particle information, assign arrays
+    demInit(xD, yD, zD, dx, dy, dz);
+    
 
+    // for (int i=0; i<xDiv*yDiv*zDiv; i++){
+    //     bdBox[i].fluidVelX = 0.0;
+    //     bdBox[i].fluidVelY = 10.0;
+    //     bdBox[i].fluidVelZ = 0.0;
+    //     bdBox[i].fluidVolF = 0.5;
+    // }
 
-    demInit();
-    //Build cell map for DEM particles and FLuent cells
-    //buildDEMCFDCellMap();
-
-
-    /* DEM iteration*/
-    //demLoop();
+    for()
+    demLoop();
+    demSave();
+    
 
 
  /******* Testing code for neighbourlist, currently not in use *******/
@@ -92,19 +91,25 @@ void run(){
 /*********************************************************************************/
 
     // Delete dynamic memeory
-    free(parPosX);
-    free(parPosY);
-    free(parPosZ);
+    // free(parPosX);
+    // free(parPosY);
+    // free(parPosZ);
     free(sortedList);
     free(sortedParIndex);
     free(cellSE);
     //free(parIndex);
-    free(parDia);
+//    free(parDia);
     free(parNb);
     free(parNoOfNb);
     free(parCIndex);
-    free(parMass);
-    free(parInert);
+    // free(parMass);
+    // free(parInert);
+    //free(parMass);
+    free(uVec);
+    free(ipRVec);
+    free(jpRVec);
+    free(bdBox);
+    free(particle);
     printf("All good!\n");
     // free(nebListIndex);
 }

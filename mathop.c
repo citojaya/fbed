@@ -1,9 +1,9 @@
 #include "common.h"
 
 double getCenterDist(int ip, int jp){
-    return sqrt((parPosX[ip]-parPosX[jp])*(parPosX[ip]-parPosX[jp])+
-        (parPosY[ip]-parPosY[jp])*(parPosY[ip]-parPosY[jp])+
-        (parPosZ[ip]-parPosZ[jp])*(parPosZ[ip]-parPosZ[jp]));
+    return sqrt((particle[ip].posX-particle[jp].posX)*(particle[ip].posX-particle[jp].posX)+
+        (particle[ip].posY-particle[jp].posY)*(particle[ip].posY-particle[jp].posY)+
+        (particle[ip].posZ-particle[jp].posZ)*(particle[ip].posZ-particle[jp].posZ));
  }
 
 void vecAdd(double *v1, double *v2, double *vec){

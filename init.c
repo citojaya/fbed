@@ -1,44 +1,131 @@
 #include "common.h"
 
-
+//allocated = 0;
 /*Read particle information and domain information
 */
-void demInit(){
-    //Read number of particles
-    readData("infile", &np, &dens, &ymod, &pois, &sfc, &rec, &dmpn, &cyldia);
-    printf("PAR  %d, %lf, %lf, %lf\n",np, dens, ymod, pois);
+void demInit(int xD, int yD, int zD, double dx, double dy, double dz){
+    xDiv = xD;
+    yDiv = yD;
+    zDiv = zD;
 
-    //Initialize arrays
+    domainDx = dx;
+    domainDy = dy;
+    domainDz = dz;
+    demTime = 0.0;
+
+    //struct Particle *par;
+   
+    //Read material data
+    readData("infile", &np, &dens, &ymod, &pois, &sfc, &rec, &dmpn, &cyldia, &timeStep);
     allocate();
-
+ 
+    //printf("Initialized %d\n",initialized);
+    printf("%d\n",np);
+ 
     // Read particle information
-    diaInput("pardia", parDia, parPosX, parPosY, parPosZ, &np);
-
+    diaInput("pardia", particle, &np);   
+    
     //Setup scaling
     setScaleFactors();
+
+    //generate bounding box for CFD and DEM sharing
+    //boundingBox(d);
+
+    for (int i=0; i<np; i++){
+        printf("PAR %lf,%lf,%lf\n",particle[i].posX/(lengthFactor),particle[i].posY/(lengthFactor),particle[i].posZ/(lengthFactor));
+    }
 }
 
 /* Allocate arrays */
 void allocate(){
     sortedList = allocateDoubleArray(np*2); //sorted neighbourlist
     sortedParIndex = allocateIntArray(np*2); //sorted particle indices 
-    parPosX = allocateDoubleArray(np);
-    parPosY = allocateDoubleArray(np);
-    parPosZ = allocateDoubleArray(np);
-    parMass = allocateDoubleArray(np);
-    parInert = allocateDoubleArray(np);
+    // parPosX = allocateDoubleArray(np);
+    // parPosY = allocateDoubleArray(np);
+    // parPosZ = allocateDoubleArray(np);
+    // parMass = allocateDoubleArray(np);
+    // parInert = allocateDoubleArray(np);
 
     uVec = allocateDoubleArray(dim);
     ipRVec = allocateDoubleArray(dim);
     jpRVec = allocateDoubleArray(dim);
 
     cellSE = allocateIntArray(np*2);
-    parDia = allocateDoubleArray(np);
+//    parDia = allocateDoubleArray(np);
     cellSE = allocateIntArray(np*3); //to identify cell start and end positions
     parNb = allocateIntArray(np*nbSize); //neighbourlist of each particle
     parNoOfNb = allocateIntArray(np); //no of neighbours in each particle
     parCIndex = allocateIntArray(np*2);// start and end of particle position in sortedList array
+    bdBox = allocateBdBoxArray(xDiv*yDiv*zDiv); //bounding box array
+    
+    for(int i=0; i<xDiv*yDiv*zDiv; i++){
+        bdBox[i].noOfFluidCells = 0;
+        bdBox[i].fluidVelX = 0.0;
+        bdBox[i].fluidVelY = 0.0;
+        bdBox[i].fluidVelZ = 0.0;
+        bdBox[i].fluidVolF = 0.0;
+        bdBox[i].dragFX = 0.0;
+        bdBox[i].dragFY = 0.0;
+        bdBox[i].dragFZ = 0.0;
+    }
+    //par = allocatePar(np);
+    particle = allocatePar(np);
+    // for(int i=0; i<np; i++){
+    //     particle[i].posX = 0.0;
+    //     particle[i].posY = 0.0;
+    //     particle[i].posZ = 0.0;
+
+    // }
+
 }
+
+/* Allocate array for domain bounding box and allocate CFD cells to bounding box cells
+   param: *d Fluent Domain pointer
+*/ 
+// void boundingBox(Domain *d){
+//     cell_t c; //Fluent cell
+//     real x[ND_ND]; //Fluent real array for storing centroid coordinates
+//     Thread *t = Lookup_Thread(d,1); //Fluent cell thread
+//     begin_c_loop(c,t)
+//       C_CENTROID(x,c,t);
+
+//       insertCellToBBox(c, x);
+//     end_c_loop(c,t)
+// }
+
+/*
+Allocate CFD cells to bounding box
+param: c Fluent fluid cell, x[] fluid cell coordinates
+*/
+// void insertCellToBBox(cell_t c, real x[]){
+//     int iIndex = ceil(x[0]/domainDx);
+//     int jIndex = ceil(x[1]/domainDy);
+//     int kIndex = ceil(x[2]/domainDz);
+//     int cellIndex = iIndex + jIndex*xDiv + kIndex*xDiv*yDiv;
+//     if(cellIndex > xDiv*yDiv*zDiv){
+//         printf("ERROR: cellIndex>xDiv*yDiv*zDiv %d\n",cellIndex);
+//         exit(0);
+//     }
+//     else{
+//         bdBox[cellIndex].fluid_cell[bdBox[cellIndex].noOfFluidCells] = c;
+//         bdBox[cellIndex].noOfFluidCells+=1;
+//     }
+//     if(bdBox[cellIndex].noOfFluidCells>NO_OF_FLUID_CELLS){
+//         printf("Cell %d\n",bdBox[cellIndex].noOfFluidCells);
+//         exit(0);
+//     }
+// }
+
+/*
+Update average fluid velocity of bounding box cells
+*/
+// void updateBBFluidVel(){
+//     for (int i=0; i<xDiv*yDiv*zDiv){
+
+//     }
+// }
+
+
 
 /* Generate cells for the problem domain which is used by particle and fluent cells. 
 These cells are used to reduce the number of searches when particle and fluid cells exchange 
@@ -106,12 +193,12 @@ void setScaleFactors()
 	maxTime	= maxTime*timeFactor;
 
     for (int i=0; i<np; i++){
-        parPosX[i] = parPosX[i]*lengthFactor;
-        parPosY[i] = parPosY[i]*lengthFactor;
-        parPosZ[i] = parPosZ[i]*lengthFactor;
-        parDia[i] = parDia[i]*lengthFactor;
-        parMass[i] = (4.0/3.0)*PI*pow((0.5*parDia[i]),3.0)*dens;
-        parInert[i] = 2.0*parMass[i]*pow(0.5*parDia[i],2)/5.0;
+        particle[i].posX = particle[i].posX*conversion*lengthFactor;
+        particle[i].posY = particle[i].posY*conversion*lengthFactor;
+        particle[i].posZ = particle[i].posZ*conversion*lengthFactor;
+        particle[i].dia = particle[i].dia*conversion*lengthFactor;
+        particle[i].mass = (4.0/3.0)*PI*pow((0.5*particle[i].dia),3.0)*dens;
+        particle[i].inert = 2.0*particle[i].mass*pow(0.5*particle[i].dia,2)/5.0;        
     }
     //printf("refLength  %lf\n ",refLength);
 }
@@ -153,5 +240,25 @@ char *allocateCharArray(int size)
 {
     char *val = (char*)malloc(size*sizeof(char));
     return val;
+}
+
+/*
+Allocate bounding box type array
+return: BdBox*
+*/
+struct BdBox *allocateBdBoxArray(int size)
+{
+    //printf("BD BOX SIZE %d\n",size);
+    struct BdBox *bdB = (struct BdBox*)malloc(size*sizeof(struct BdBox));
+    return  bdB;
+}
+
+/*
+Allocate particle array
+*/
+struct Particle *allocatePar(int np)
+{
+    struct Particle *par = (struct Particle*)malloc(np*sizeof(struct Particle));
+    return par;
 }
 

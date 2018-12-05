@@ -26,7 +26,7 @@ void findRec(FILE *inFile, char* strDest){
 
 /*---Read input data from a file ----*/
 void readData(char *infile, int *np, double *dens, double *ymod, 
-			double *pois, double *sfc, double *rec, double *dmpn, double *cyldia){
+			double *pois, double *sfc, double *rec, double *dmpn, double *cyldia, double *dt){
 	// input file reading
 	char filename[20];
 	strcpy(filename, infile);
@@ -66,16 +66,20 @@ void readData(char *infile, int *np, double *dens, double *ymod,
 
 	findRec(InFile, "CylinderBC");
 	fscanf(InFile, "%lf", cyldia);
-	//printf("np: %d\n",np);
-	//findRec(InFile, "packing_TIME");
-	//fscanf(InFile, "%lf", &h_load->tPacking);	// packing time
+	fprintf(LogFile,"Domain size\n");
+	fprintf(LogFile,"xDiv,yDiv,zDiv: %d,%d,%d\n :",xDiv,yDiv,zDiv);
+
+	findRec(InFile, "SIMULATION");
+	fscanf(InFile, "%lf", dt);	
+	//fprintf(LogFile,"xmin,xmax %lf,%lf\n :",xmin,xmax);
+	//fprintf(LogFile,"ymin,ymax %lf,%lf\n :",ymin,ymax);
+	//fprintf(LogFile,"zmin,zmax %lf,%lf\n :",zmin,zmax);
 
     fclose(InFile);
 	fclose(LogFile);
 }
 
-void diaInput(char *infile, double *parDia, double *parPosX, 
-				double *parPosY, double *parPosZ,int *np){
+void diaInput(char *infile, struct Particle *par, int *np){
 	char filename[20];
 	strcpy(filename, infile);
 	strcat(filename ,".in"); 
@@ -88,22 +92,65 @@ void diaInput(char *infile, double *parDia, double *parPosX,
 	}
 	int num = 0;
 
+	double pDia, pX, pY, pZ;
     //printf("No of par %d\n",np);
 	findRec(pDiaFile, "PARTICLE");
 	for(int i=0; i<*np; i++){
-		fscanf(pDiaFile, "%lf", &parDia[i]);
-		fscanf(pDiaFile, "%lf", &parPosX[i]);
-		fscanf(pDiaFile, "%lf", &parPosY[i]);
-		fscanf(pDiaFile, "%lf", &parPosZ[i]);
-
-		parDia[i] = parDia[i]*conversion*lengthFactor;
-		parPosX[i] = parPosX[i]*conversion*lengthFactor;
-		parPosY[i] = parPosY[i]*conversion*lengthFactor;
-		parPosZ[i] = parPosZ[i]*conversion*lengthFactor;
-		//for(int i=0; i<dim; i++)fscanf(pDiaFile, "%lf", &parPos[i*dim+i]);
-		
-		printf("D[%d]: %lf, %lf, %lf, %lf\n", i, parDia[i], parPosX[i], parPosY[i], parPosZ[i]);
-	
+		fscanf(pDiaFile, "%lf", &pDia);
+		fscanf(pDiaFile, "%lf", &pX);
+		fscanf(pDiaFile, "%lf", &pY);
+		fscanf(pDiaFile, "%lf", &pZ);
+		particle[i].dia = pDia;
+		particle[i].posX = pX;
+		particle[i].posY = pY;
+		particle[i].posZ = pZ;
+		//printf("D[%d]: %lf, %lf, %lf, %lf\n", i, particle[i].dia, particle[i].posX, particle[i].posY, particle[i].posZ);
 	}
+	fclose(pDiaFile);
 }
+
+void demSave(){
+	//FILE *outfile; 
+	char filename[20];
+	sprintf(filename, "particle.dat");
+	FILE *outfile = fopen(filename, "a");
+	fprintf(outfile, "TIME = %lf\n",demTime/timeFactor);
+	//fprintf(outfile, "VARIABLES = X   Y   Z   R   VX   VY   VZ\n");
+	for(int i=0; i<np; i++){
+		fprintf(outfile, "%11.5lf   %11.5lf   %11.5lf   %11.5f  %11.5lf   %11.5lf  %11.5lf\n",
+	 		1e3*particle[i].posX/lengthFactor,1e3*particle[i].posY/lengthFactor,
+			 1e3*particle[i].posZ/lengthFactor,1e3*particle[i].dia/lengthFactor,
+			 particle[i].vX,particle[i].vY/velocityFactor,particle[i].vZ/velocityFactor); 
+	}
+	fclose(outfile);
+	printf("SAVED\n");
+
+}
+
+// void writeTec(double *pPosX, double *parPosY, double *parPosZ){
+// 	FILE *outfile; 
+// 	char filename[20];
+// 	sprintf(filename, "particle_info.dat");
+
+// 	if (h_dem->Outs == 0)
+// 	{
+// 		outfile = fopen(filename, "wt");
+
+// 		fprintf(outfile, "TITLE = \" PARTICLE INFORMATION \" \n");
+// 		fprintf(outfile, "VARIABLES = X   Y   Z   R   VX   VY   VZ   W   F\n");
+// 		fclose(outfile);
+// 	}
+
+// 	outfile = fopen(filename, "a");
+// 	fprintf(outfile, "ZONE T= \" %12.6lf s \" \n", h_dem->ctime * Rdu->rtunit);
+// 	for (int ip = 0; ip<TotalParticle; ip++)
+// 	{
+// 		fprintf(outfile, "%11.5lf   %11.5lf   %11.5lf   %11.5f  %11.5lf   %11.5lf   %11.5lf   %11.5lf   %11.5lf\n", 
+// 		                  hPos[ip].x,   hPos[ip].y,   hPos[ip].z,  hRad[ip],
+// 		                  hVel[ip].x,   hVel[ip].y,   hVel[ip].z, 
+// 		                  length(hAngVel[ip]), length(hForce[ip]));
+// 	}
+
+// 	fclose(outfile);
+// }
 
