@@ -25,8 +25,8 @@ void findRec(FILE *inFile, char* strDest){
 }
 
 /*---Read input data from a file ----*/
-void readData(char *infile, int *np, double *dens, double *ymod, 
-			double *pois, double *sfc, double *rec, double *dmpn, double *cyldia, double *dt){
+void readInput(char *infile, int *np, real *dens, real *ymod, 
+			real *pois, real *sfc, real *rec, real *dmpn, real *rf, real *cyldia, real *dt, int *nW){
 	// input file reading
 	char filename[20];
 	strcpy(filename, infile);
@@ -45,14 +45,14 @@ void readData(char *infile, int *np, double *dens, double *ymod,
 	FILE *LogFile = fopen(LogjName, "a");
 
 	// expand size for computing area
-	double exComp = 0.0;
+	real exComp = 0.0;
 
 	// loading phase
-	double DieDepth = 1.0;
-	double UnDepth  = 0.0;
-	double BdDepth  = 0.0;
+	real DieDepth = 1.0;
+	real UnDepth  = 0.0;
+	real BdDepth  = 0.0;
 
-	double parDia = 0.0;
+	real parDia = 0.0;
 	
 	findRec(InFile, "PAR_NUMBER");
 	fscanf(InFile, "%d",  np);
@@ -63,6 +63,7 @@ void readData(char *infile, int *np, double *dens, double *ymod,
 	fscanf(InFile, "%lf", pois);
 	fscanf(InFile, "%lf", sfc);
 	fscanf(InFile, "%lf", dmpn);
+	fscanf(InFile, "%lf", rf);
 
 	findRec(InFile, "CylinderBC");
 	fscanf(InFile, "%lf", cyldia);
@@ -71,6 +72,9 @@ void readData(char *infile, int *np, double *dens, double *ymod,
 
 	findRec(InFile, "SIMULATION");
 	fscanf(InFile, "%lf", dt);	
+
+	findRec(InFile, "WALLS");
+	fscanf(InFile, "%d", nW);	
 	//fprintf(LogFile,"xmin,xmax %lf,%lf\n :",xmin,xmax);
 	//fprintf(LogFile,"ymin,ymax %lf,%lf\n :",ymin,ymax);
 	//fprintf(LogFile,"zmin,zmax %lf,%lf\n :",zmin,zmax);
@@ -79,7 +83,13 @@ void readData(char *infile, int *np, double *dens, double *ymod,
 	fclose(LogFile);
 }
 
-void diaInput(char *infile, struct Particle *par, int *np){
+void writeLog(char *infile, char *line, real num){
+	FILE *LogFile = fopen(infile, "a");
+	fprintf(LogFile,line);
+	fclose(LogFile);
+}
+
+void diaInput(char *infile, struct demParticle *par, int *np){
 	char filename[20];
 	strcpy(filename, infile);
 	strcat(filename ,".in"); 
@@ -92,7 +102,7 @@ void diaInput(char *infile, struct Particle *par, int *np){
 	}
 	int num = 0;
 
-	double pDia, pX, pY, pZ;
+	real pDia, pX, pY, pZ;
     //printf("No of par %d\n",np);
 	findRec(pDiaFile, "PARTICLE");
 	for(int i=0; i<*np; i++){
@@ -100,13 +110,34 @@ void diaInput(char *infile, struct Particle *par, int *np){
 		fscanf(pDiaFile, "%lf", &pX);
 		fscanf(pDiaFile, "%lf", &pY);
 		fscanf(pDiaFile, "%lf", &pZ);
-		particle[i].dia = pDia;
-		particle[i].posX = pX;
-		particle[i].posY = pY;
-		particle[i].posZ = pZ;
-		//printf("D[%d]: %lf, %lf, %lf, %lf\n", i, particle[i].dia, particle[i].posX, particle[i].posY, particle[i].posZ);
+		demPart[i].dia = pDia;
+		demPart[i].pos[0] = pX;
+		demPart[i].pos[1] = pY;
+		demPart[i].pos[2] = pZ;
+		//printf("D[%d]: %lf, %lf, %lf, %lf\n", i, demPart[i].dia, demPart[i].posX, demPart[i].posY, demPart[i].posZ);
 	}
 	fclose(pDiaFile);
+}
+
+void readWalls(char *infile, int *walls){
+	char filename[20];
+	strcpy(filename, infile);
+	strcat(filename ,".in"); 
+	FILE *wFile = fopen(filename, "rt");
+
+	if (wFile == NULL){
+		fprintf(stderr, "Can't open the parameter file %s! \n", filename);
+		char c = getchar();
+		exit(1);
+	}
+
+	findRec(wFile, "WALL_NO");
+	for(int i=0; i<noOfWalls; i++){
+		int wallNo;
+		fscanf(wFile, "%d", &wallNo);
+		walls[i] = wallNo;
+	}
+	fclose(wFile);
 }
 
 void demSave(){
@@ -114,20 +145,31 @@ void demSave(){
 	char filename[20];
 	sprintf(filename, "particle.dat");
 	FILE *outfile = fopen(filename, "a");
-	fprintf(outfile, "TIME = %lf\n",demTime/timeFactor);
-	//fprintf(outfile, "VARIABLES = X   Y   Z   R   VX   VY   VZ\n");
-	for(int i=0; i<np; i++){
-		fprintf(outfile, "%11.5lf   %11.5lf   %11.5lf   %11.5f  %11.5lf   %11.5lf  %11.5lf\n",
-	 		1e3*particle[i].posX/lengthFactor,1e3*particle[i].posY/lengthFactor,
-			 1e3*particle[i].posZ/lengthFactor,1e3*particle[i].dia/lengthFactor,
-			 particle[i].vX,particle[i].vY/velocityFactor,particle[i].vZ/velocityFactor); 
-	}
+	fprintf(outfile, "TIME = %lf\n",CURRENT_TIME);
+
+  	Injection *I;
+  	Injection *Ilist = Get_dpm_injections();
+  
+  	// Update FLUENT particle postion and velocity 
+  	int ip = 0; 
+  	loop(I,Ilist)
+  	{
+    	Particle *p;
+    	loop(p,I->p)
+    	{
+			fprintf(outfile, "%11.5lf   %11.5lf   %11.5lf   %11.5f  %11.5lf   %11.5lf  %11.5lf\n",
+			P_POS(p)[0]/conversion, P_POS(p)[1]/conversion,P_POS(p)[2]/conversion,
+			P_VEL(p)[0],P_VEL(p)[1],P_VEL(p)[2], P_DIAM(p)/conversion);
+		}
+			
+    }
+ 
 	fclose(outfile);
 	printf("SAVED\n");
 
 }
 
-// void writeTec(double *pPosX, double *parPosY, double *parPosZ){
+// void writeTec(real *pPosX, real *parPosY, real *parPosZ){
 // 	FILE *outfile; 
 // 	char filename[20];
 // 	sprintf(filename, "particle_info.dat");

@@ -3,62 +3,100 @@
 //allocated = 0;
 /*Read particle information and domain information
 */
-void demInit(int xD, int yD, int zD, double dx, double dy, double dz){
-    xDiv = xD;
-    yDiv = yD;
-    zDiv = zD;
-
-    domainDx = dx;
-    domainDy = dy;
-    domainDz = dz;
+void demInit(){
+    time_count = 0;// time counter used for saving output file
     demTime = 0.0;
 
-    //struct Particle *par;
-   
-    //Read material data
-    readData("infile", &np, &dens, &ymod, &pois, &sfc, &rec, &dmpn, &cyldia, &timeStep);
-    allocate();
- 
-    //printf("Initialized %d\n",initialized);
-    printf("%d\n",np);
- 
-    // Read particle information
-    diaInput("pardia", particle, &np);   
-    
-    //Setup scaling
-    setScaleFactors();
-
-    //generate bounding box for CFD and DEM sharing
-    //boundingBox(d);
-
-    for (int i=0; i<np; i++){
-        printf("PAR %lf,%lf,%lf\n",particle[i].posX/(lengthFactor),particle[i].posY/(lengthFactor),particle[i].posZ/(lengthFactor));
+    if(LogFile){
+        fclose(LogFile);
     }
+    LogFile = fopen("logfile.log", "a");
+    if(sizeof(walls) != 0){
+        //printf("SIZE OF WALLS %d\n",sizeof(walls));
+        free(walls);
+
+        free(uVec);
+        free(ipRVec);
+        free(jpRVec);
+
+        free(bdBox);
+            
+        free(ijVec);
+            //free(tempVec);
+        free(rotVel);
+        free(ipCntPntVel);
+        free(jpCntPntVel);
+        free(cntPntVel);
+
+        for(int i=0; i<np; i++){
+            free(demPart[i].pos);
+            free(demPart[i].angVel);
+            free(demPart[i].vel);
+            free(demPart[i].hisDisp);
+            free(demPart[i].force);
+            free(demPart[i].momentum);
+            free(demPart[i].faceNode1);
+            free(demPart[i].faceNode2);
+            free(demPart[i].faceNode3);
+            free(demPart[i].surfNorm);
+        }
+        free(demPart);
+    } 
+
+
+    //Read material data
+    readInput("infile", &parArraySize, &dens, &ymod, &pois, &sfc, &rec, &dmpn, &rf, &cyldia, &timeStep, &noOfWalls);
+    allocate();
+    //Read particle-wall contact surfaces
+    readWalls("infile", walls);
+    // Read particle information
+    //diaInput("pardia", demPart, &np);  
+  
+    // //Assign particles to cells
+    // for (int i=0; i<np; i++){
+    //     int iIndex = ceil((demPart[i].pos[0]-xmin)/domainDx);
+    //     int jIndex = ceil((demPart[i].pos[1]-ymin)/domainDy);
+    //     int kIndex = ceil((demPart[i].pos[2]-zmin)/domainDz);
+    //     int cellIndex = iIndex + jIndex*xDiv + kIndex*xDiv*yDiv;
+    //     //insert particle to cell
+    //     insertToBdBox(i,cellIndex);
+    //     //printf("Cell index %d, %d, %d\n",iIndex,jIndex,kIndex);
+    // }
+
+    // //Update neighbour list
+    // for (int i=0; i<np; i++){
+    //     updateNeighbourList(i, xmin, ymin, zmin);
+    // }
+
+
+    /**** TESTING *****/
+    // for(int i=0; i<xDiv*yDiv*zDiv; i++){
+    //     if(bdBox[i].noOfParticles >0)
+    //       printf("CELL NO %d PAR NO %d \n",i,bdBox[i].noOfParticles);
+    // }
+    /******************/
+
 }
 
 /* Allocate arrays */
 void allocate(){
-    sortedList = allocateDoubleArray(np*2); //sorted neighbourlist
-    sortedParIndex = allocateIntArray(np*2); //sorted particle indices 
-    // parPosX = allocateDoubleArray(np);
-    // parPosY = allocateDoubleArray(np);
-    // parPosZ = allocateDoubleArray(np);
-    // parMass = allocateDoubleArray(np);
-    // parInert = allocateDoubleArray(np);
+    uVec = allocateDoubleArray(DIM);
+    ipRVec = allocateDoubleArray(DIM);
+    jpRVec = allocateDoubleArray(DIM);
+    ijVec = allocateDoubleArray(DIM);
+    //tempVec = allocateDoubleArray(dim);
+    rotVel = allocateDoubleArray(DIM);
+    ipCntPntVel = allocateDoubleArray(DIM);
+    jpCntPntVel = allocateDoubleArray(DIM);
+    cntPntVel = allocateDoubleArray(DIM);
 
-    uVec = allocateDoubleArray(dim);
-    ipRVec = allocateDoubleArray(dim);
-    jpRVec = allocateDoubleArray(dim);
-
-    cellSE = allocateIntArray(np*2);
-//    parDia = allocateDoubleArray(np);
-    cellSE = allocateIntArray(np*3); //to identify cell start and end positions
-    parNb = allocateIntArray(np*nbSize); //neighbourlist of each particle
-    parNoOfNb = allocateIntArray(np); //no of neighbours in each particle
-    parCIndex = allocateIntArray(np*2);// start and end of particle position in sortedList array
+    //parNb = allocateIntArray(np*nbSize); //neighbourlist of each particle
+    //parNoOfNb = allocateIntArray(np); //no of neighbours in each particle
     bdBox = allocateBdBoxArray(xDiv*yDiv*zDiv); //bounding box array
     
     for(int i=0; i<xDiv*yDiv*zDiv; i++){
+        bdBox[i].noOfFaces = 0;
+        bdBox[i].noOfParticles = 0;
         bdBox[i].noOfFluidCells = 0;
         bdBox[i].fluidVelX = 0.0;
         bdBox[i].fluidVelY = 0.0;
@@ -68,64 +106,28 @@ void allocate(){
         bdBox[i].dragFY = 0.0;
         bdBox[i].dragFZ = 0.0;
     }
-    //par = allocatePar(np);
-    particle = allocatePar(np);
-    // for(int i=0; i<np; i++){
-    //     particle[i].posX = 0.0;
-    //     particle[i].posY = 0.0;
-    //     particle[i].posZ = 0.0;
+    
+    demPart = allocatePar(parArraySize);
+    for(int i=0; i<parArraySize; i++){
+        demPart[i].dt = 0.0;
+        demPart[i].currentTime = 0.0;
+        demPart[i].nrmDisp = 0.0;
+        demPart[i].noOfNeigh = 0;
+        demPart[i].pos = allocateDoubleArray(DIM);
+        demPart[i].angVel = allocateDoubleArray(DIM);
+        demPart[i].vel = allocateDoubleArray(DIM);
+        demPart[i].hisDisp = allocateDoubleArray(DIM);
+        demPart[i].force = allocateDoubleArray(DIM);
+        demPart[i].momentum = allocateDoubleArray(DIM);
+        demPart[i].faceNode1 = allocateDoubleArray(DIM);
+        demPart[i].faceNode2 = allocateDoubleArray(DIM);
+        demPart[i].faceNode3 = allocateDoubleArray(DIM);
+        demPart[i].surfNorm = allocateDoubleArray(DIM);
 
-    // }
+    }
+    walls = allocateIntArray(noOfWalls);
 
 }
-
-/* Allocate array for domain bounding box and allocate CFD cells to bounding box cells
-   param: *d Fluent Domain pointer
-*/ 
-// void boundingBox(Domain *d){
-//     cell_t c; //Fluent cell
-//     real x[ND_ND]; //Fluent real array for storing centroid coordinates
-//     Thread *t = Lookup_Thread(d,1); //Fluent cell thread
-//     begin_c_loop(c,t)
-//       C_CENTROID(x,c,t);
-
-//       insertCellToBBox(c, x);
-//     end_c_loop(c,t)
-// }
-
-/*
-Allocate CFD cells to bounding box
-param: c Fluent fluid cell, x[] fluid cell coordinates
-*/
-// void insertCellToBBox(cell_t c, real x[]){
-//     int iIndex = ceil(x[0]/domainDx);
-//     int jIndex = ceil(x[1]/domainDy);
-//     int kIndex = ceil(x[2]/domainDz);
-//     int cellIndex = iIndex + jIndex*xDiv + kIndex*xDiv*yDiv;
-//     if(cellIndex > xDiv*yDiv*zDiv){
-//         printf("ERROR: cellIndex>xDiv*yDiv*zDiv %d\n",cellIndex);
-//         exit(0);
-//     }
-//     else{
-//         bdBox[cellIndex].fluid_cell[bdBox[cellIndex].noOfFluidCells] = c;
-//         bdBox[cellIndex].noOfFluidCells+=1;
-//     }
-//     if(bdBox[cellIndex].noOfFluidCells>NO_OF_FLUID_CELLS){
-//         printf("Cell %d\n",bdBox[cellIndex].noOfFluidCells);
-//         exit(0);
-//     }
-// }
-
-/*
-Update average fluid velocity of bounding box cells
-*/
-// void updateBBFluidVel(){
-//     for (int i=0; i<xDiv*yDiv*zDiv){
-
-//     }
-// }
-
-
 
 /* Generate cells for the problem domain which is used by particle and fluent cells. 
 These cells are used to reduce the number of searches when particle and fluid cells exchange 
@@ -135,30 +137,105 @@ void buildDEMCFDCellMap(){
     printf("buildDEMCFDCellMap\n");
 }
 
+
+/*
+Add contact faces to bounding box
+*/
+void addFaceToBdBox(){
+    for(int i=0; i<xDiv*yDiv*zDiv; i++){
+        bdBox[i].noOfFaces = 0;
+    }  
+    int noOfF=0;
+    Domain *d = Get_Domain(1);
+    
+    for(int i=0; i<noOfWalls; i++){
+        Thread *tf;
+        face_t f;
+        Node *node;
+        tf = Lookup_Thread(d, walls[i]);
+        int n;
+        begin_f_loop(f, tf)//Loop over faces
+        {
+            real f_cent[ND_ND];
+            F_CENTROID(f_cent,f,tf);
+            //printf("CENTROID %lf,%lf,%lf\n",f_cent[0],f_cent[1],f_cent[2]);
+            int iIndex = ceil((f_cent[0]*lengthFactor-xmin)/domainDx);
+            int jIndex = ceil((f_cent[1]*lengthFactor-ymin)/domainDy);
+            int kIndex = ceil((f_cent[2]*lengthFactor-zmin)/domainDz);
+            int cellIndex = iIndex + jIndex*xDiv + kIndex*xDiv*yDiv;
+            
+            if(bdBox[cellIndex].noOfFaces > NO_OF_FACES){
+                printf("CELL INDEX %d\n",cellIndex);
+                printf("bdBox[cellIndex].noOfFaces > NO_OF_FACES\n");
+            }
+            else{
+                bdBox[cellIndex].surfaces[bdBox[cellIndex].noOfFaces] = f;
+                bdBox[cellIndex].surfaceThread = tf;
+
+                bdBox[cellIndex].noOfFaces++;
+            }
+        //    f_node_loop(f,tf,n)//Loop over nodes
+        //     {
+        //         node = F_NODE(f,tf,n);
+
+        //         //insert face to cell
+        //         bdBox[cellIndex].surfaces[]
+        
+        //     }
+            
+            noOfF++;
+        }
+        end_f_loop(f,tf)
+        
+    }
+    printf("FACES %d\n",noOfF);
+}
+
+/*
+Insert particle to BdBox
+param:
+pI - particle index
+cI - cell index
+*/
+void insertToBdBox(Tracked_Particle *p, int cI){
+    bdBox[cI].parts[bdBox[cI].noOfParticles] = p;
+    bdBox[cI].noOfParticles++;
+    if(bdBox[cI].noOfParticles > NO_OF_PARTICLES_IN_BDCELL){
+        printf("bdBox[cI].noOfParticles > NO_OF_PARTICLES_IN_BDCELL\n");
+    }
+}
+
+/*
+Delete particle from bdBox
+param:
+pI - particle index
+cI = cell index
+*/
+void deleteParticle(Tracked_Particle *p, int cI){
+    for(int i=0; i<bdBox[cI].noOfParticles; i++){
+        Tracked_Particle *np = bdBox[cI].parts[i];
+        if(p->part_id == np->part_id){
+            bdBox[cI].parts[i] = bdBox[cI].parts[bdBox[cI].noOfParticles-1];
+            bdBox[cI].noOfParticles--;
+            break;
+        }
+    }
+}
+
+
 /*
 Initially neighbourlist array is empty. Fill neighbourlist. 
 */
-void initialize(double *nbList, int *parIndex, int *cellSE, int np,
-    double *pos, double *parDia)
+void initialize(real *nbList, int *parIndex, int *cellSE, int np,
+    real *pos, real *parDia)
 {
-    int j=0;
-    for (int i=0; i<np; i++){
-        sortedList[j] = pos[i] - 0.5*parDia[i];
-        sortedList[j+1] = pos[i] + 0.5*parDia[i];
-        parIndex[j] = i; //particle index
-        parIndex[j+1] = i; //particle index
-        cellSE[j] = 1; //cell start
-        cellSE[j+1] = 2; //cell end
-        parCIndex[j] = j; //cell start index for each particle
-        parCIndex[j+1] = j+1; //cell end index for each particle
-        j += 2;
-    }
+ 
 }
 
 /*
 Assign scale factors
 */
-void setScaleFactors()
+void setReduceUnits()
 {
     //Scale factors for reduced units
 	refLength = largestParDia*conversion;
@@ -173,7 +250,7 @@ void setScaleFactors()
 	StressFactor = pressureFactor;
 	energyFactor = 6.0/(gravity*PI*pow(refLength,4)*refDensity);
 	momentFactor = energyFactor;
-	powerFactor = 6.0/(pow(gravity,1.5)*PI*pow((double)refLength,3.5)*refDensity);
+	powerFactor = 6.0/(pow(gravity,1.5)*PI*pow((real)refLength,3.5)*refDensity);
 	velocityFactor = 1.0/sqrt(refLength*gravity);
 	accFactor = 1.0/gravity;
 	angVelFactor = sqrt(refLength/gravity);
@@ -184,22 +261,34 @@ void setScaleFactors()
     cutGap = CUTGAP*conversion*lengthFactor;
 
     dsmaxCff = sfc*(2.0-pois)/(2.0*(1.0-pois));
+    dti = 0.0;
+    dd = 0.0;
+    dsmax = 0.0;
 
     // scale particle properties
-    dens = dens*densityFactor;
     ymod = ymod*pressureFactor;
     cyldia = cyldia*lengthFactor;
 	timeStep = timeStep*timeFactor;
 	maxTime	= maxTime*timeFactor;
 
+    elasticMod = ymod/(1.0-pow(pois,2));
+
     for (int i=0; i<np; i++){
-        particle[i].posX = particle[i].posX*conversion*lengthFactor;
-        particle[i].posY = particle[i].posY*conversion*lengthFactor;
-        particle[i].posZ = particle[i].posZ*conversion*lengthFactor;
-        particle[i].dia = particle[i].dia*conversion*lengthFactor;
-        particle[i].mass = (4.0/3.0)*PI*pow((0.5*particle[i].dia),3.0)*dens;
-        particle[i].inert = 2.0*particle[i].mass*pow(0.5*particle[i].dia,2)/5.0;        
+        // demPart[i].pos[0] = demPart[i].pos[0]*lengthFactor;
+        // demPart[i].pos[1] = demPart[i].pos[1]*lengthFactor;
+        // demPart[i].pos[2] = demPart[i].pos[2]*lengthFactor;
+        demPart[i].dt = timeStep;
+        demPart[i].dia = demPart[i].dia*lengthFactor;
+        demPart[i].mass = (4.0/3.0)*PI*pow((0.5*demPart[i].dia),3.0)*dens*densityFactor;
+        demPart[i].inert = 2.0*demPart[i].mass*pow(0.5*demPart[i].dia,2)/5.0;        
     }
+        //Scale boundary values
+    xmin = xmin*lengthFactor;
+    ymin = ymin*lengthFactor;
+    zmin = zmin*lengthFactor;
+    domainDx = domainDx*lengthFactor;
+    domainDy = domainDy*lengthFactor;
+    domainDz = domainDz*lengthFactor;
     //printf("refLength  %lf\n ",refLength);
 }
 
@@ -222,13 +311,13 @@ int *allocateIntArray(int size)
 }
 
 /*
-Allocate a double* type array
-return: double* 
+Allocate a real* type array
+return: real* 
 */
-double *allocateDoubleArray(int size)
+real *allocateDoubleArray(int size)
 {
-    double *val = (double*)malloc(size*sizeof(double));
-    memset(val,0.0,size*sizeof(double));
+    real *val = (real*)malloc(size*sizeof(real));
+    memset(val,0.0,size*sizeof(real));
     return val;
 }
 
@@ -256,9 +345,9 @@ struct BdBox *allocateBdBoxArray(int size)
 /*
 Allocate particle array
 */
-struct Particle *allocatePar(int np)
+struct demParticle *allocatePar(int np)
 {
-    struct Particle *par = (struct Particle*)malloc(np*sizeof(struct Particle));
+    struct demParticle *par = (struct demParticle*)malloc(np*sizeof(struct demParticle));
     return par;
 }
 
