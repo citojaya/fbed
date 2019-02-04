@@ -4,7 +4,9 @@
 /*Read particle information and domain information
 */
 void demInit(){
+    updateDPM = 0;
     time_count = 0;// time counter used for saving output file
+    particle_counter = 0; //counter for keeping the track of number of particles
     demTime = 0.0;
 
     if(LogFile){
@@ -45,37 +47,20 @@ void demInit(){
 
 
     //Read material data
-    readInput("infile", &parArraySize, &dens, &ymod, &pois, &sfc, &rec, &dmpn, &rf, &cyldia, &timeStep, &noOfWalls);
+    readInput("infile", &parArraySize, &dens, &ymod, &pois, &sfc, &rec, &dmpn, &rf, &cyldia, &timeStep, 
+            &noOfWalls, &updateDPM);
     allocate();
     //Read particle-wall contact surfaces
     readWalls("infile", walls);
+    //printf("TIME STEP %lf\n",timeStep/timeFactor);
+
+    writeLogNum("logfile2.log","Update DPM ",updateDPM);
+    writeLogNum("logfile2.log","Particle Array Size ",parArraySize);
+    writeLogNum("logfile2.log","density ",dens);
+    writeLogNum("logfile2.log","Youngs Modulus ",ymod);
+    writeLogNum("logfile2.log","Timestep ",timeStep);
     // Read particle information
     //diaInput("pardia", demPart, &np);  
-  
-    // //Assign particles to cells
-    // for (int i=0; i<np; i++){
-    //     int iIndex = ceil((demPart[i].pos[0]-xmin)/domainDx);
-    //     int jIndex = ceil((demPart[i].pos[1]-ymin)/domainDy);
-    //     int kIndex = ceil((demPart[i].pos[2]-zmin)/domainDz);
-    //     int cellIndex = iIndex + jIndex*xDiv + kIndex*xDiv*yDiv;
-    //     //insert particle to cell
-    //     insertToBdBox(i,cellIndex);
-    //     //printf("Cell index %d, %d, %d\n",iIndex,jIndex,kIndex);
-    // }
-
-    // //Update neighbour list
-    // for (int i=0; i<np; i++){
-    //     updateNeighbourList(i, xmin, ymin, zmin);
-    // }
-
-
-    /**** TESTING *****/
-    // for(int i=0; i<xDiv*yDiv*zDiv; i++){
-    //     if(bdBox[i].noOfParticles >0)
-    //       printf("CELL NO %d PAR NO %d \n",i,bdBox[i].noOfParticles);
-    // }
-    /******************/
-
 }
 
 /* Allocate arrays */
@@ -117,15 +102,31 @@ void allocate(){
         demPart[i].angVel = allocateDoubleArray(DIM);
         demPart[i].vel = allocateDoubleArray(DIM);
         demPart[i].hisDisp = allocateDoubleArray(DIM);
+
+        demPart[i].hisDisp[0]  = 0.0;
+        demPart[i].hisDisp[1]  = 0.0;
+        demPart[i].hisDisp[2]  = 0.0;   
+
+        demPart[i].angVel[0] = 0.0;
+        demPart[i].angVel[1] = 0.0;
+        demPart[i].angVel[2] = 0.0;
+
         demPart[i].force = allocateDoubleArray(DIM);
         demPart[i].momentum = allocateDoubleArray(DIM);
+        demPart[i].momentum[0] = 0.0;
+        demPart[i].momentum[1] = 0.0;
+        demPart[i].momentum[2] = 0.0;
         demPart[i].faceNode1 = allocateDoubleArray(DIM);
         demPart[i].faceNode2 = allocateDoubleArray(DIM);
         demPart[i].faceNode3 = allocateDoubleArray(DIM);
         demPart[i].surfNorm = allocateDoubleArray(DIM);
+        demPart[i].displacement = 0.0;
 
     }
+
+
     walls = allocateIntArray(noOfWalls);
+    //dpmList = (Tracked_Particle)malloc(2*sizeof(Tracked_Particle));
 
 }
 
@@ -197,7 +198,7 @@ param:
 pI - particle index
 cI - cell index
 */
-void insertToBdBox(Tracked_Particle *p, int cI){
+void insertToBdBox(int p, int cI){
     bdBox[cI].parts[bdBox[cI].noOfParticles] = p;
     bdBox[cI].noOfParticles++;
     if(bdBox[cI].noOfParticles > NO_OF_PARTICLES_IN_BDCELL){
@@ -211,10 +212,10 @@ param:
 pI - particle index
 cI = cell index
 */
-void deleteParticle(Tracked_Particle *p, int cI){
+void deleteParticle(int p, int cI){
     for(int i=0; i<bdBox[cI].noOfParticles; i++){
-        Tracked_Particle *np = bdBox[cI].parts[i];
-        if(p->part_id == np->part_id){
+        int np = bdBox[cI].parts[i];
+        if(p == np){
             bdBox[cI].parts[i] = bdBox[cI].parts[bdBox[cI].noOfParticles-1];
             bdBox[cI].noOfParticles--;
             break;
@@ -261,6 +262,7 @@ void setReduceUnits()
     cutGap = CUTGAP*conversion*lengthFactor;
 
     dsmaxCff = sfc*(2.0-pois)/(2.0*(1.0-pois));
+    writeLogNum("logfile2.log"," DS MAX",dsmaxCff);
     dti = 0.0;
     dd = 0.0;
     dsmax = 0.0;
@@ -278,17 +280,30 @@ void setReduceUnits()
         // demPart[i].pos[1] = demPart[i].pos[1]*lengthFactor;
         // demPart[i].pos[2] = demPart[i].pos[2]*lengthFactor;
         demPart[i].dt = timeStep;
-        demPart[i].dia = demPart[i].dia*lengthFactor;
-        demPart[i].mass = (4.0/3.0)*PI*pow((0.5*demPart[i].dia),3.0)*dens*densityFactor;
-        demPart[i].inert = 2.0*demPart[i].mass*pow(0.5*demPart[i].dia,2)/5.0;        
+        // demPart[i].dia = demPart[i].dia*lengthFactor;
+        // demPart[i].mass = (4.0/3.0)*PI*pow((0.5*demPart[i].dia),3.0)*dens*densityFactor;
+        //demPart[i].inert = 2.0*demPart[i].mass*pow(0.5*demPart[i].dia,2)/5.0;        
     }
-        //Scale boundary values
+
+    //Find allowed displacment for neighbourlist update
+    rIn = largestParDia*conversion*lengthFactor;
+    rOut = 1.55*rIn; //By definition
+    allowedDisp = 0.5*(rOut-rIn);
+
+    //Adjust boundary limits
     xmin = xmin*lengthFactor;
     ymin = ymin*lengthFactor;
     zmin = zmin*lengthFactor;
+    xmax = xmax*lengthFactor;
+    ymax = ymax*lengthFactor;
+    zmax = zmax*lengthFactor;
+
     domainDx = domainDx*lengthFactor;
     domainDy = domainDy*lengthFactor;
     domainDz = domainDz*lengthFactor;
+
+    cellRadius = 0.5*sqrt(domainDx*domainDx+domainDy*domainDy);
+    writeLogNum("logfile2.log","CEll R ",cellRadius/lengthFactor);
     //printf("refLength  %lf\n ",refLength);
 }
 

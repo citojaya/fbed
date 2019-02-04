@@ -26,7 +26,7 @@ void findRec(FILE *inFile, char* strDest){
 
 /*---Read input data from a file ----*/
 void readInput(char *infile, int *np, real *dens, real *ymod, 
-			real *pois, real *sfc, real *rec, real *dmpn, real *rf, real *cyldia, real *dt, int *nW){
+			real *pois, real *sfc, real *rec, real *dmpn, real *rf, real *cyldia, real *dt, int *nW, int *updateDPM){
 	// input file reading
 	char filename[20];
 	strcpy(filename, infile);
@@ -75,6 +75,9 @@ void readInput(char *infile, int *np, real *dens, real *ymod,
 
 	findRec(InFile, "WALLS");
 	fscanf(InFile, "%d", nW);	
+
+	findRec(InFile, "DPM");
+	fscanf(InFile, "%d", updateDPM);	
 	//fprintf(LogFile,"xmin,xmax %lf,%lf\n :",xmin,xmax);
 	//fprintf(LogFile,"ymin,ymax %lf,%lf\n :",ymin,ymax);
 	//fprintf(LogFile,"zmin,zmax %lf,%lf\n :",zmin,zmax);
@@ -83,10 +86,68 @@ void readInput(char *infile, int *np, real *dens, real *ymod,
 	fclose(LogFile);
 }
 
-void writeLog(char *infile, char *line, real num){
+void writeLogNum(char *infile, char *line, real num){
+	FILE *LogFile = fopen(infile, "a");
+	fprintf(LogFile,line);
+	fprintf(LogFile,"%lf\n",num);
+	fclose(LogFile);
+}
+
+void writeLogLine(char *infile, char *line){
 	FILE *LogFile = fopen(infile, "a");
 	fprintf(LogFile,line);
 	fclose(LogFile);
+}
+
+void writeInjectionFile(char *infile){
+	char filename[20];
+	strcpy(filename, infile);
+	FILE *injFile = fopen(filename, "w");
+	Injection *I;
+    Injection *Ilist = Get_dpm_injections();
+
+    loop(I,Ilist)
+    {
+    	Particle *p;
+        loop(p,I->p)
+        { 
+			char line[100];
+			strcpy(line, "((");
+			//strcat(filename ,".in"); 
+			//fprintf(injFile,"((");
+			char pX[8];
+			sprintf(pX, "%f", P_POS(p)[0]);
+			strcat(line ,pX); 
+			strcat(line ," "); 
+			char pY[8];
+			sprintf(pY, "%f", P_POS(p)[1]);
+			strcat(line ,pY); 
+			strcat(line ," ");
+			char pZ[8];
+			sprintf(pZ, "%f", P_POS(p)[2]);
+			strcat(line ,pZ);
+			strcat(line ," "); 
+			char pVelX[8];
+			sprintf(pVelX, "%f", P_VEL(p)[0]);
+			strcat(line ,pVelX);
+			strcat(line ," ");
+			char pVelY[8];
+			sprintf(pVelY, "%f", P_VEL(p)[1]);
+			strcat(line ,pVelY);
+			strcat(line ," ");
+			char pVelZ[8];
+			sprintf(pVelZ, "%f", P_VEL(p)[2]);
+			strcat(line ,pVelZ);
+			strcat(line ," ");
+			char pDia[8];
+			sprintf(pDia, "%f", P_DIAM(p));
+			strcat(line ,pDia);
+			strcat(line ," 0.0 1.0))\n");
+			fprintf(injFile, line);
+		}
+	}
+
+	fclose(injFile);
 }
 
 void diaInput(char *infile, struct demParticle *par, int *np){
@@ -152,21 +213,26 @@ void demSave(){
   
   	// Update FLUENT particle postion and velocity 
   	int ip = 0; 
-  	loop(I,Ilist)
-  	{
-    	Particle *p;
-    	loop(p,I->p)
-    	{
-			fprintf(outfile, "%11.5lf   %11.5lf   %11.5lf   %11.5f  %11.5lf   %11.5lf  %11.5lf\n",
-			P_POS(p)[0]/conversion, P_POS(p)[1]/conversion,P_POS(p)[2]/conversion,
-			P_VEL(p)[0],P_VEL(p)[1],P_VEL(p)[2], P_DIAM(p)/conversion);
-		}
+	 loop(I,Ilist)
+  	 {
+     	Particle *p;
+     	loop(p,I->p)
+     	{
+	 		// fprintf(outfile, "%11.5lf   %11.5lf   %11.5lf   %11.5f  %11.5lf   %11.5lf  %11.5lf\n",
+	 		// P_POS(p)[0]/conversion, P_POS(p)[1]/conversion,P_POS(p)[2]/conversion,
+	 		// P_VEL(p)[0],P_VEL(p)[1],P_VEL(p)[2], P_DIAM(p)/conversion);
+
+		 	fprintf(outfile, "%11.5lf   %11.5lf   %11.5lf   %11.5f  %11.5lf   %11.5lf  %11.5lf\n",
+			demPart[p->part_id].pos[0]/(lengthFactor*conversion), demPart[p->part_id].pos[1]/(lengthFactor*conversion),
+			demPart[p->part_id].pos[2]/(lengthFactor*conversion),
+			demPart[p->part_id].vel[0]/(velocityFactor),demPart[p->part_id].vel[1]/(velocityFactor),demPart[p->part_id].vel[2]/(velocityFactor),
+			demPart[p->part_id].dia/(lengthFactor*conversion));
+	 	}
 			
-    }
+     }
  
 	fclose(outfile);
-	printf("SAVED\n");
-
+	
 }
 
 // void writeTec(real *pPosX, real *parPosY, real *parPosZ){

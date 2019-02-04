@@ -1,18 +1,61 @@
 #include "common.h"
 
+/* Return particle volume*/
+real partVol(int p){
+    return (4.0/3.0)*PI*pow(demPart[p].dia*0.5,3);
+}
+
+/*Find solid fraction within cell radius*/
+real solidFraction(int ip){
+    //Find cell center
+    int iIndex = ceil((demPart[ip].pos[0] - xmin)/domainDx);
+    int jIndex = ceil((demPart[ip].pos[1] - ymin)/domainDy);
+    int kIndex = ceil((demPart[ip].pos[2] - zmin)/domainDz);
+    int cellIndex = iIndex + jIndex*xDiv + kIndex*xDiv*yDiv;     
+    
+    real cX = iIndex*domainDx + 0.5*domainDx;
+    real cY = jIndex*domainDy + 0.5*domainDy;
+    real cZ = kIndex*domainDz + 0.5*domainDz;
+    real vol = 0.0;
+    real totVol = 0.0;
+    for(int i=0; i<bdBox[cellIndex].noOfParticles; i++){
+        int jp = bdBox[cellIndex].parts[i];
+        real r = 0.5*demPart[jp].dia;
+        real jpX = demPart[jp].pos[0];
+        real jpY = demPart[jp].pos[1];
+        real jpZ = demPart[jp].pos[2];
+        
+        real rR = sqrt((jpX-cX)*(jpX-cX) + (jpY-cY)*(jpY-cY) + (jpZ-cZ)*(jpZ-cZ)); 
+        
+        if( rR <= (0.5*domainDx-r)){
+            vol = 0.8*partVol(jp);
+        }
+        else if(rR > (cellRadius-r)){
+            vol = partVol(jp);
+        }
+        else if(rR <= (cellRadius-r) && rR  > (domainDx*0.5-r)){
+            vol = 0.5*partVol(jp); 
+        }
+        totVol += vol;       
+    }
+    //writeLogNum("logfile3.log","VOL ",totVol/(lengthFactor*lengthFactor*lengthFactor));
+    return totVol/((4.0/3.0)*PI*pow(cellRadius,3));
+}
+
 /* Return center distance of two particles
 param:
 p1 - particle 1
 p2 - particle 2 */
-real getCenterDist(Tracked_Particle *ip, Tracked_Particle *jp){
-    real ipX = P_POS(ip)[0]*lengthFactor;
-    real ipY = P_POS(ip)[1]*lengthFactor;
-    real ipZ = P_POS(ip)[2]*lengthFactor;
-    real jpX = P_POS(jp)[0]*lengthFactor;
-    real jpY = P_POS(jp)[1]*lengthFactor;
-    real jpZ = P_POS(jp)[2]*lengthFactor;
+real getCenterDist(int ip, int jp){
+    real ipX = demPart[ip].pos[0];
+    real ipY = demPart[ip].pos[1];
+    real ipZ = demPart[ip].pos[2];
+    real jpX = demPart[jp].pos[0];
+    real jpY = demPart[jp].pos[1];
+    real jpZ = demPart[jp].pos[2];
 
-    return sqrt((ipX-jpX)*(ipX-jpX) + (ipY-jpY)*(ipY-jpY) + (ipZ-jpZ)*(ipZ-jpZ));
+    real val = sqrt((ipX-jpX)*(ipX-jpX) + (ipY-jpY)*(ipY-jpY) + (ipZ-jpZ)*(ipZ-jpZ));
+    return val;
  }
 
 /* Add two vecotrs
@@ -155,8 +198,14 @@ void projVec(real *v, real *n, real *vec, int type){
         tV2[1] = -n[1];
         tV2[2] = -n[2];
         crossProd(tV2, tV1, tV3);
-        real temp = sqrt((tV2[0]*tV2[0]+tV2[1]*tV2[1]+tV2[2]*tV2[2])/
+        real temp;
+        if((v[0]*v[0]+v[1]*v[1]+v[2]*v[2]) != 0.0){
+            temp = sqrt((tV2[0]*tV2[0]+tV2[1]*tV2[1]+tV2[2]*tV2[2])/
                             (v[0]*v[0]+v[1]*v[1]+v[2]*v[2]));  
+        }
+        else{
+            temp = 0.0;
+        }
         vec[0] = tV3[0]*temp;
         vec[1] = tV3[1]*temp;
         vec[2] = tV3[2]*temp;      
