@@ -200,7 +200,7 @@ void projVec(real *v, real *n, real *vec, int type){
         crossProd(tV2, tV1, tV3);
         real temp;
         if((v[0]*v[0]+v[1]*v[1]+v[2]*v[2]) != 0.0){
-            temp = sqrt((tV2[0]*tV2[0]+tV2[1]*tV2[1]+tV2[2]*tV2[2])/
+            temp = sqrt((tV3[0]*tV3[0]+tV3[1]*tV3[1]+tV3[2]*tV3[2])/
                             (v[0]*v[0]+v[1]*v[1]+v[2]*v[2]));  
         }
         else{

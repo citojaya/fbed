@@ -80,9 +80,9 @@ void allocate(){
     bdBox = allocateBdBoxArray(xDiv*yDiv*zDiv); //bounding box array
     
     for(int i=0; i<xDiv*yDiv*zDiv; i++){
-        bdBox[i].noOfFaces = 0;
+        //bdBox[i].noOfFaces = 0;
         bdBox[i].noOfParticles = 0;
-        bdBox[i].noOfFluidCells = 0;
+        //bdBox[i].noOfFluidCells = 0;
         bdBox[i].fluidVelX = 0.0;
         bdBox[i].fluidVelY = 0.0;
         bdBox[i].fluidVelZ = 0.0;
@@ -143,9 +143,9 @@ void buildDEMCFDCellMap(){
 Add contact faces to bounding box
 */
 void addFaceToBdBox(){
-    for(int i=0; i<xDiv*yDiv*zDiv; i++){
-        bdBox[i].noOfFaces = 0;
-    }  
+    // for(int i=0; i<xDiv*yDiv*zDiv; i++){
+    //     bdBox[i].noOfFaces = 0;
+    // }  
     int noOfF=0;
     Domain *d = Get_Domain(1);
     
@@ -165,16 +165,16 @@ void addFaceToBdBox(){
             int kIndex = ceil((f_cent[2]*lengthFactor-zmin)/domainDz);
             int cellIndex = iIndex + jIndex*xDiv + kIndex*xDiv*yDiv;
             
-            if(bdBox[cellIndex].noOfFaces > NO_OF_FACES){
-                printf("CELL INDEX %d\n",cellIndex);
-                printf("bdBox[cellIndex].noOfFaces > NO_OF_FACES\n");
-            }
-            else{
-                bdBox[cellIndex].surfaces[bdBox[cellIndex].noOfFaces] = f;
-                bdBox[cellIndex].surfaceThread = tf;
+            // if(bdBox[cellIndex].noOfFaces > NO_OF_FACES){
+            //     printf("CELL INDEX %d\n",cellIndex);
+            //     printf("bdBox[cellIndex].noOfFaces > NO_OF_FACES\n");
+            // }
+            // else{
+            //     bdBox[cellIndex].surfaces[bdBox[cellIndex].noOfFaces] = f;
+            //     bdBox[cellIndex].surfaceThread = tf;
 
-                bdBox[cellIndex].noOfFaces++;
-            }
+            //     bdBox[cellIndex].noOfFaces++;
+            // }
         //    f_node_loop(f,tf,n)//Loop over nodes
         //     {
         //         node = F_NODE(f,tf,n);

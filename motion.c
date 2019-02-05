@@ -117,6 +117,10 @@ void surfaceContactForce(int p, real nrmDisp, real *uVec){
     dd = vecMag(disp);
     fdt = sfc*nrmCntForce;
 
+    // writeLogNum("logfile2.log"," disp X ",disp[0]);
+    // writeLogNum("logfile2.log"," disp Y ",disp[1]);
+    // writeLogNum("logfile2.log"," disp Z ",disp[2]);
+
     real *fdtVec = allocateDoubleArray(DIM);
     if(dd < 1e-6){
         dd = 0.0;
@@ -149,8 +153,11 @@ void surfaceContactForce(int p, real nrmDisp, real *uVec){
     //sum of forces
     real nrmForce = (nrmCntForce + nrmDampForce);
     sclVecMult(nrmForce, uVec, totalForce);
-    
-    //vecAdd(totalForce, fdtVec, totalForce);
+
+    // writeLogNum("logfile2.log"," FDT X ",fdtVec[0]);
+    // writeLogNum("logfile2.log"," FDT Y ",fdtVec[1]);
+    // writeLogNum("logfile2.log"," FDT Z ",fdtVec[2]);
+    vecAdd(totalForce, fdtVec, totalForce);
     crossProd(ipRVec, totalForce, momentum);
     real *rotMom = allocateDoubleArray(DIM);
     sclVecMult(0.5*rf*demPart[p].dia*nrmCntForce, demPart[p].angVel, rotMom);
@@ -188,7 +195,7 @@ void partContactForce(int ip, int jp, real nrmDisp){
     //real *pVel = allocateDoubleArray(DIM);
 
     sclVecMult(-0.5*demPart[ip].dia,uVec,ipRVec);
-    sclVecMult(-0.5*demPart[jp].dia,uVec,jpRVec);
+    sclVecMult(0.5*demPart[jp].dia,uVec,jpRVec);
 
     crossProd(demPart[ip].angVel,ipRVec,rotVel);
     vecAdd(demPart[ip].vel,rotVel,ipCntPntVel);
@@ -255,7 +262,7 @@ void partContactForce(int ip, int jp, real nrmDisp){
     real nrmForce = (nrmCntForce + nrmDampForce);
     //writeLog("logfile2.log","nrmForce ",nrmForce);
     sclVecMult(nrmForce, uVec, totalForce);
-    //vecAdd(totalForce, fdtVec, totalForce);
+    vecAdd(totalForce, fdtVec, totalForce);
     crossProd(ipRVec, totalForce, momentum);
     real *rotMom = allocateDoubleArray(DIM);
     sclVecMult(0.5*rf*demPart[ip].dia*nrmCntForce, demPart[ip].angVel, rotMom);

@@ -30,7 +30,7 @@
 #define NBSIZE 50 //size of neighbourlist
 #define NO_OF_FLUID_CELLS 20 //number of fluid cells in a bounding box
 #define NO_OF_FACES 3 //number of faces contacting with particles
-#define NO_OF_PARTICLES_IN_BDCELL 80
+#define NO_OF_PARTICLES_IN_BDCELL 50
 //Testing parameters
 #define FVOLF 0.5f //fluid volume fraction
 #define BETA 0.4f //interphase momentum exchange coefficient
@@ -120,8 +120,8 @@ struct BdBox{
 	real fluidVolF;
 	real dragFX, dragFY, dragFZ;
 
-	int noOfFluidCells; //number of fluid cells
-	int noOfFaces; //number of contact faces
+	//int noOfFluidCells; //number of fluid cells
+	//int noOfFaces; //number of contact faces
 	int noOfParticles; //number of DEM particles
 	int parts[NO_OF_PARTICLES_IN_BDCELL];
 	face_t surfaces[NO_OF_FACES];
@@ -212,14 +212,11 @@ void update(real *pX, int np);
 
 real getCenterDist(int ip, int jp);
 void setReduceUnits();
-//void boundingBox(Domain *d);
 void updateBBFluidVel();
 void insertToBdBox(int p, int cI);
 void deleteParticle(int p, int cI);
-void moveDPM(Tracked_Particle *p);
 void forceCalculation(Particle *p);
 void updatePosition(Particle *p);
-//void test();
 void run();
 
 #endif 
